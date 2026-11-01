@@ -1,147 +1,114 @@
 # Smart Drying with Timestral
 
-A research prototype for **rolling time-series forecasting and decision support in drying processes**, based on [Timestral by Mistral AI](https://github.com/mistralai/timestral).
+A research prototype for **rolling forecasting and decision support in drying processes**, based on [Timestral by Mistral AI](https://github.com/mistralai/timestral).
 
-The idea is simple: instead of running a dryer mainly according to a fixed recipe and elapsed time, use the measurements collected during the process to continuously estimate **when the desired drying target will be reached**.
+The goal is to move from process monitoring to a simple operational prediction:
 
-The current repository uses hot-air drying of potato samples as an experimental case study. The workflow itself is not specific to potatoes and is intended as a general framework for drying processes represented as time series.
+**How much time remains before the desired drying target is reached?**
+
+The current implementation uses potato semi-drying as a case study, but the workflow is not specific to potatoes and is intended as a general approach for drying processes represented as time series.
 
 ## Why Timestral?
 
-Drying is a dynamic process. Temperature, air conditions, product properties and pretreatments can change the shape and duration of the drying curve.
+Traditional machine-learning approaches generally require a dedicated dataset and process-specific model training.
 
-Classical process control may rely on predefined operating conditions, fixed processing times and operator experience:
+Timestral is a pre-trained foundation model for time series and can be used **zero-shot**: it receives the process history observed so far and forecasts its future evolution without additional training on our drying experiments.
+
+This makes a different drying workflow possible:
 
 **Conventional drying**
 
 `process settings → elapsed time → operator assessment → stop`
 
-This project explores a different approach:
+**Timestral-supported drying**
 
-**Smart drying**
+`process measurements → rolling forecast → estimated time-to-target → operator decision`
 
-`process measurements → rolling forecast → estimated time-to-target → updated decision → stop`
+As new measurements become available, the forecast is recalculated. The observed process history becomes longer and the remaining prediction horizon becomes shorter.
 
-At regular intervals, all measurements collected so far are provided to Timestral. The observed window therefore becomes progressively longer, while the remaining interval to be forecast becomes shorter.
+## First results
 
-The prediction evolves together with the process.
+The first results are encouraging.
 
-In this example, the predicted time required to reach the selected moisture target is repeatedly updated as new measurements become available. Early predictions are more uncertain; the estimate is progressively refined as the process develops.
+For a semi-drying target of **1.6 g H₂O/g dry matter**, after approximately **3–3.5 h** of process history, the median error in predicted time-to-target is approximately **1–2 min**. The target is typically reached after slightly more than **5 h**.
 
-## Why a time-series foundation model?
+These predictions are obtained **without training Timestral on the experimental drying data**.
 
-Timestral is a family of foundation models developed specifically for probabilistic time-series forecasting.
+![Rolling forecast convergence](docs/figures/rolling_target_convergence.png)
 
-This makes it interesting for smart drying because it can provide:
+The figure shows how the estimated target time is progressively updated as additional process measurements become available.
 
-- **zero-shot forecasting**, without training a dedicated model from scratch for every experiment;
+## From forecasting to decision support
 
-- **rolling predictions**, updated as new process measurements become available;
+The purpose is not simply to predict a drying curve or minimize forecasting error.
 
-- **probabilistic forecasts**, useful for describing prediction uncertainty;
-
-- support for **past and known-future covariates**, enabling future integration of process variables;
-
-- compact model configurations with CPU inference support.
-
-The last point is particularly relevant for process engineering. A forecasting layer that does not depend on expensive computing infrastructure could potentially be integrated directly into a dryer, an industrial controller or a low-cost edge computer.
-
-Embedded deployment is not yet benchmarked in this project and should therefore be considered a development objective rather than a demonstrated result.
-
-## From prediction to decision support
-
-The objective is not simply to obtain a low forecasting error.
-
-The useful question during drying is:
-
-**How much longer should the process continue to reach the desired target?**
+The relevant output is the estimated **remaining time to a technological target**.
 
 The current workflow evaluates:
 
-- predicted time of target achievement;
-
+- predicted time-to-target;
 - remaining process time;
+- prediction error at the target;
+- moisture content at the predicted stopping time;
+- evolution of forecast uncertainty as the process progresses.
 
-- error in the predicted stopping time;
+The operator still defines the target and retains control of the process. Forecasting adds quantitative information to support that decision.
 
-- actual moisture content corresponding to the predicted stopping time;
+This is also the perspective behind the connection with **Industry 5.0**: using sensing and predictive AI to support human decision-making rather than simply increasing automation.
 
-- evolution of forecast uncertainty;
+## Why local inference matters
 
-- forecasting performance as additional process history becomes available.
+Timestral is available in relatively compact configurations and can be executed locally.
 
-This makes the output directly interpretable for process supervision.
+This is particularly interesting for drying applications because it opens the possibility of running forecasting directly near the process, potentially on compact and relatively inexpensive computing hardware.
 
-The operator still defines the technological target and retains control of the process. Forecasting provides quantitative evidence to support that decision.
+A future system could therefore combine:
 
-This human-centred use of AI is consistent with the principles of **Industry 5.0**: the goal is not simply to automate the dryer, but to combine process measurements, predictive intelligence and operator decisions.
+`dryer sensors → local forecasting → time-to-target → operator`
+
+Embedded deployment has not yet been benchmarked in this project and remains a development objective.
 
 ## Current case study
 
-The experimental dataset currently used for validation consists of hot-air drying curves obtained from potato samples under different processing conditions.
+The current experimental case study concerns **hot-air semi-drying of sliced potatoes** under different technological conditions.
 
-Moisture content on a dry basis (MCdb) is currently used as the forecasting variable, and several semi-drying targets are evaluated.
+Moisture content on a dry basis (MCdb) is currently used as the forecasting variable, with several semi-drying targets evaluated.
 
-The case study is used to test the methodology, not to define its application boundary.
+The experimental work is part of a project funded by **COPAVIT (Acquapendente, Italy)** and is developed in collaboration with **BOKU Food Tech**.
 
-The same approach could be extended to other foods, biomaterials or drying systems.
+The potato case study is used to develop and validate the methodology, not to define its application boundary. The same approach could be investigated for other foods, biomaterials and drying systems.
 
-Future process information could include:
-
-- air temperature;
-
-- relative humidity;
-
-- air velocity;
-
-- product temperature;
-
-- geometrical information or shrinkage obtained from imaging systems.
+Future developments may include additional process information such as temperature, relative humidity, air velocity, product temperature and image-derived geometrical information.
 
 ## Workflow
 
 The active pipeline is intentionally small:
 
-- `scripts/01_timestral_rolling.py`  
-  Rolling forecast for one process trajectory and one selected target.
+- `scripts/01_timestral_rolling.py` — rolling forecast for one trajectory and one target;
+- `scripts/02_timestral_validate_all.py` — validation across multiple trajectories and targets;
+- `scripts/03_timestral_plots.py` — summary statistics and figures;
+- `scripts/timestral_utils.py` — shared Timestral inference and evaluation functions.
 
-- `scripts/02_timestral_validate_all.py`  
-  Validation across multiple trajectories and multiple drying targets.
-
-- `scripts/03_timestral_plots.py`  
-  Generation of summary statistics and diagnostic figures.
-
-- `scripts/timestral_utils.py`  
-  Shared Timestral inference and evaluation functions.
-
-The scripts are numbered according to their role in the workflow.
-
-Experimental data and generated results are kept local and are not distributed with the public repository.
+Experimental data and generated results are currently kept local and are not distributed with this repository.
 
 ## Timestral
 
-This project uses the **Timestral** time-series foundation model developed by Mistral AI.
+This project uses [**Timestral**](https://github.com/mistralai/timestral), developed by Mistral AI.
 
-Official repository: [mistralai/timestral](https://github.com/mistralai/timestral)
-
-The current implementation uses zero-shot inference: the Timestral model weights are not trained or updated using the drying experiments.
+The current implementation uses zero-shot inference: Timestral model weights are **not trained or updated** using the drying experiments.
 
 ## Status
 
-This repository is a **research prototype**.
+This repository is a **research prototype**, not a validated industrial process-control system.
 
-It currently demonstrates and evaluates a methodological framework for foundation-model-assisted drying decision support.
+Current development priorities include:
 
-It should not yet be considered a validated industrial control system.
-
-Planned developments include:
-
-- comparison of different Timestral model sizes;
-
-- evaluation on additional drying processes and materials;
-
+- validation on additional drying processes and materials;
 - integration of physical and sensor-derived covariates;
-
+- comparison of Timestral model sizes;
 - benchmarking on low-cost edge hardware;
+- evaluation of computational requirements for embedded deployment.
 
-- assessment of computational requirements for embedded deployment.
+## License
+
+This project is released under the **Apache License 2.0**.
